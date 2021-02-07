@@ -172,8 +172,14 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
 												 fpca_seed = 1988, fpca_error_thresh = 0.0001,
 												 fpca_index_significantDigits = 4L, cores = 1L, 
 												 verbose = TRUE, 
+												 precalc_theta = TRUE,
 												 ...){
 	
+  time_start = Sys.time()
+  if(verbose > 0) {
+    message("Starting Time ", time_start)
+  }
+  
   index = NULL
   rm(list="index")
   if (!(family %in% c("gaussian","binomial","gamma","poisson"))) {
@@ -196,10 +202,77 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   index_warped      = list(NA, max_iterations + 2)
   index_warped[[1]] = Y$index_scaled
   reg_loss          = rep(NA, max_iterations + 1)
+  
+  if(precalc_theta){
+    
+    if (family == "gamma") {
+      mean_family = stats::Gamma(link = "log")
+    } else {
+      mean_family = family
+    }
+    if (verbose > 0){
+      message("register_fpca: Pre-calculating knots and basis functions")
+      message("time elapsed = ", difftime(Sys.time(), time_start))
+    } 
+    ## construct theta matrix
+    if (is.null(t_min)) { t_min = min(time) }
+    if (is.null(t_max)) { t_max = max(time) }
+    
+    if (periodic) {
+      # if periodic, then we want more global knots, because the resulting object from pbs 
+      # only has (knots+intercept) columns.
+      knots     = quantile(time, probs = seq(0, 1, length = Kt + 1))[-c(1, Kt + 1)]
+      Theta_phi = pbs(c(t_min, t_max, time), knots = knots, intercept = TRUE)[-(1:2),]
+    } else {
+      # if not periodic, then we want fewer global knots, because the resulting object from bs
+      # has (knots+degree+intercept) columns, and degree is set to 3 by default.
+      knots     = quantile(time, probs = seq(0, 1, length = Kt - 2))[-c(1, Kt - 2)]
+      Theta_phi = bs(c(t_min, t_max, time), knots = knots, intercept = TRUE)[-(1:2),]
+    }
+    if (verbose > 0){
+      message("register_fpca: Pre-calculating knots and basis functions")
+      message("time elapsed = ", difftime(Sys.time(), time_start))
+    }
+    nrows_basis = nrow(Theta_phi)
+    # if greater than 10M, subsample
+    if (nrows_basis > 10000000 && subsample) {
+      if (verbose) {
+        message("Registr: Running Sub-sampling")
+      }       
+      uids = unique(Y$id)
+      avg_rows_per_id = nrows_basis / length(uids)
+      size = round(10000000 / avg_rows_per_id)
+      ids = sample(uids, size = size, replace = FALSE)
+      rm(uids)
+      subsampling_index = which(Y$id %in% ids)
+      rm(ids)
+    } else {
+      subsampling_index <- 1:nrows_basis
+    }
+    ## get initial estimates for the population coefficients
+    if (verbose) {
+      message("register_fpca: Running GLM for Initial Estimates")
+    }   
+    if (requireNamespace("fastglm", quietly = TRUE)) {
+      mean_coefs_init = fastglm::fastglm(
+        x = Theta_phi[subsampling_index,], y = Y$value[subsampling_index],
+        family = mean_family, method=2)
+      mean_coefs_init = coef(mean_coefs_init)
+    } else {
+      mean_coefs_init = coef(glm(Y$value[subsampling_index] ~ 0 + Theta_phi[subsampling_index,], family = mean_family,
+                            glm.control = list(trace = verbose > 0)))
+    }
+  } else {
+    Theta_phi = NULL
+    mean_coefs_init = NULL
+  }
+  rm(subsampling_index, meean_family)
+  
 
   # first register values to the overall mean
   if (verbose) {
-    message("Running registr step")
+    message("register_fpca: running initial registr step")
+    message("time elapsed = ", difftime(Sys.time(), time_start))
   }
   registr_step = registr(Y = Y, Kt = Kt, Kh = Kh, family = family,
   											 incompleteness = incompleteness,
@@ -207,9 +280,17 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   											 Y_template     = Y_template,
   											 row_obj = rows, cores = cores,
   											 verbose = verbose > 1,
+  											 knots = knots,
+  											 Theta_phi = Theta_phi,
+  											 mean_coefs_init = mean_coefs_init,
   											 ...)
   index_warped[[2]] = registr_step$Y$index_scaled
   reg_loss[1]       = registr_step$loss
+  if (verbose) {
+    message("register_fpca:  initial registr step finished")
+    message("time elapsed = ", difftime(Sys.time(), time_start))
+  }
+  
   
   iter        = 0
   delta_index = rep(NA, max_iterations)
@@ -223,12 +304,16 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   	  message("current iteration: ", iter)
   	}
   	if (verbose) {
-  	  message("FPCA Step")
+  	  message("register_fpca:: Iterative FPCA Step")
   	}  	
   	if (fpca_type == "variationalEM") { # GFPCA after Wrobel et al. (2019)
   		if (family == "binomial") {
   			fpca_step = bfpca(registr_step$Y, npc = npc, Kt = Kt, row_obj = rows, seed = fpca_seed, maxiter = fpca_maxiter, 
-  												error_thresh = fpca_error_thresh, verbose = verbose > 1, ...)
+  												error_thresh = fpca_error_thresh, verbose = verbose > 1, 
+  												knots = knots,
+  												Theta_phi = Theta_phi,
+  												mean_coefs_init = mean_coefs_init,
+  												...)
   		} else if (family == "gaussian") {
   			fpca_step = fpca_gauss(registr_step$Y, npc = npc, Kt = Kt, row_obj = rows, seed = fpca_seed, maxiter = fpca_maxiter,
   														 error_thresh = fpca_error_thresh,  verbose = verbose > 1, ...)
@@ -251,7 +336,11 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   															start_params            = gamm4_startParams)
   	}
   	if (verbose) {
-  	  message("Registr Step")
+  	  message("register_fpca: FPCA step finished")
+  	  message("time elapsed = ", difftime(Sys.time(), time_start))
+  	}  	
+  	if (verbose) {
+  	  message("register_fpca: Iterative registr Step")
   	}  	
   	registr_step = registr(obj = fpca_step, Kt = Kt, Kh = Kh, family = family, 
   												 incompleteness = incompleteness,
@@ -260,7 +349,14 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   												 beta           = registr_step$hinv_beta,
   												 cores          = cores,
   												 verbose = verbose > 1,
+  												 knots = knots,
+  												 Theta_phi = Theta_phi,
+  												 mean_coefs_init = mean_coefs_init,
   												 ...)
+  	if (verbose) {
+  	  message("register_fpca: Iterative registr step finished")
+  	  message("time elapsed = ", difftime(Sys.time(), time_start))
+  	}  	
   	
   	index_warped[[iter + 2]] = registr_step$Y$index_scaled
   	reg_loss[iter + 1]       = registr_step$loss
@@ -286,7 +382,11 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   if (fpca_type == "variationalEM") { # GFPCA after Wrobel et al. (2019)
   	if (family == "binomial") {
   		fpca_step = bfpca(registr_step$Y, npc = npc, Kt = Kt, row_obj = rows, seed = fpca_seed, maxiter = fpca_maxiter, 
-  											error_thresh = fpca_error_thresh, ...)
+  											error_thresh = fpca_error_thresh, 
+  											knots = knots,
+  											Theta_phi = Theta_phi,
+  											mean_coefs_init = mean_coefs_init,
+  											...)
   	} else if (family == "gaussian") {
   		fpca_step = fpca_gauss(registr_step$Y, npc = npc, Kt = Kt, row_obj = rows, seed = fpca_seed, maxiter = fpca_maxiter, 
   													 error_thresh = fpca_error_thresh, ...)

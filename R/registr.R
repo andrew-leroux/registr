@@ -66,6 +66,9 @@
 #' @param ... additional arguments passed to or from other functions
 #' @param subsample if the number of rows of the data is greater than 
 #' 10 million rows, the `id` values are subsampled to get the mean coefficients.
+#' @param knots pre-calculated knot locations on the time domain
+#' @param Theta_phi pre-calculated basis matrix for splines on the time domain
+#' @param mean_coefs_init pre-calculated population level coefficients for splines on the time domain
 #' 
 #' @return An list containing:
 #' \item{Y}{The observed data. The variables \code{index} and \code{index_scaled}
@@ -166,6 +169,8 @@ registr = function(obj = NULL, Y = NULL, Kt = 8, Kh = 4, family = "gaussian", gr
                    periodic = FALSE, warping = "nonparametric",
                    gamma_scales = NULL, cores = 1L,  subsample = TRUE,
                    verbose = TRUE,
+                   Theta_phi = NULL,
+                   mean_coefs_init = NULL,
                    ...){
   
   if (!is.null(incompleteness)) {
@@ -306,7 +311,7 @@ registr = function(obj = NULL, Y = NULL, Kt = 8, Kh = 4, family = "gaussian", gr
     if (requireNamespace("fastglm", quietly = TRUE)) {
       mean_coefs = fastglm::fastglm(
         x = mean_basis, y = mean_dat$value,
-        family = mean_family)
+        family = mean_family, method=2)
       mean_coefs = coef(mean_coefs)
     } else {
       mean_coefs = coef(glm(mean_dat$value ~ 0 + mean_basis, family = mean_family,

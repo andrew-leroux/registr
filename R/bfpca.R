@@ -6,6 +6,9 @@
 #' binary functional data.
 #'
 #' @inheritParams fpca_gauss
+#' @param knots pre-calculated knot locations on the time domain
+#' @param Theta_phi pre-calculated basis matrix for splines on the time domain
+#' @param mean_coefs_init pre-calculated population level coefficients for splines on the time domain
 #' 
 #' @author Julia Wrobel \email{julia.wrobel@@cuanschutz.edu},
 #' Jeff Goldsmith \email{ajg2202@@cumc.columbia.edu}
@@ -29,6 +32,8 @@
 #' \item{Y}{The observed data.}
 #' \item{family}{\code{binomial}, for compatibility with \code{refund.shiny} package.}
 #' \item{error}{vector containing error for each iteration of the algorithm.}
+#' 
+#' 
 #' @export
 #' @references Jaakkola, T. S. and Jordan, M. I. (1997).
 ##' A variational approach to Bayesian logistic regression models and their extensions. 
@@ -45,9 +50,13 @@
 #' plot(bfpca_object)
 #'
 bfpca = function(Y, npc = 1, Kt = 8, maxiter = 50, t_min = NULL, t_max = NULL, 
-                 print.iter = FALSE, row_obj= NULL,
+                 print.iter = TRUE, row_obj= NULL,
                  seed = 1988, periodic = FALSE, error_thresh = 0.0001,
-                 verbose = TRUE, ...){
+                 verbose = TRUE,
+                 knots = NULL,
+                 Theta_phi = NULL,
+                 mean_coefs_init = NULL,
+                 ...){
   
   curr_iter = 1
   error     = rep(NA, maxiter)
@@ -75,33 +84,48 @@ bfpca = function(Y, npc = 1, Kt = 8, maxiter = 50, t_min = NULL, t_max = NULL,
   	stop("'binomial' family requires data with binary values of 0 or 1")
   }
   
-  ## construct theta matrix
-  if (is.null(t_min)) { t_min = min(time) }
-  if (is.null(t_max)) { t_max = max(time) }
-  
-  if (periodic) {
-  	# if periodic, then we want more global knots, because the resulting object from pbs 
-  	# only has (knots+intercept) columns.
-  	knots     = quantile(time, probs = seq(0, 1, length = Kt + 1))[-c(1, Kt + 1)]
-  	Theta_phi = pbs(c(t_min, t_max, time), knots = knots, intercept = TRUE)[-(1:2),]
+  if(any(is.null(Theta_phi), is.null(mean_coefs_init), is.null(knots))){
+    
+    ## construct theta matrix
+    if (is.null(t_min)) { t_min = min(time) }
+    if (is.null(t_max)) { t_max = max(time) }
+    
+    if (periodic) {
+      # if periodic, then we want more global knots, because the resulting object from pbs 
+      # only has (knots+intercept) columns.
+      knots     = quantile(time, probs = seq(0, 1, length = Kt + 1))[-c(1, Kt + 1)]
+      Theta_phi = pbs(c(t_min, t_max, time), knots = knots, intercept = TRUE)[-(1:2),]
+    } else {
+      # if not periodic, then we want fewer global knots, because the resulting object from bs
+      # has (knots+degree+intercept) columns, and degree is set to 3 by default.
+      knots     = quantile(time, probs = seq(0, 1, length = Kt - 2))[-c(1, Kt - 2)]
+      Theta_phi = bs(c(t_min, t_max, time), knots = knots, intercept = TRUE)[-(1:2),]
+    }
+    if (requireNamespace("fastglm", quietly = TRUE)) {
+      glm_obj = fastglm::fastglm(y = Y$value, x = Theta_phi, family = "binomial")
+    } else {
+      glm_obj = glm(Y$value ~ 0 + Theta_phi, family = "binomial",
+                    glm.control = list(trace = verbose > 0))
+    }
+    alpha_coefs = coef(glm_obj)
+    rm(glm_obj)
   } else {
-  	# if not periodic, then we want fewer global knots, because the resulting object from bs
-  	# has (knots+degree+intercept) columns, and degree is set to 3 by default.
-  	knots     = quantile(time, probs = seq(0, 1, length = Kt - 2))[-c(1, Kt - 2)]
-  	Theta_phi = bs(c(t_min, t_max, time), knots = knots, intercept = TRUE)[-(1:2),]
+    alpha_coefs = mean_coefs_init
   }
   
   ## initialize all your vectors
   set.seed(seed)
   
-  xi          = matrix(rnorm(dim(Y)[1]), ncol = 1) * 0.5
-  if (requireNamespace("fastglm", quietly = TRUE)) {
-    glm_obj = fastglm::fastglm(y = Y$value, x = Theta_phi, family = "binomial")
-  } else {
-    glm_obj = glm(Y$value ~ 0 + Theta_phi, family = "binomial",
-                  glm.control = list(trace = verbose > 0))
+  if(verbose > 0){
+    message("bFPCA: starting GLM")
   }
-  alpha_coefs = coef(glm_obj)
+  
+  xi          = matrix(rnorm(dim(Y)[1]), ncol = 1) * 0.5
+
+  
+  if(verbose > 0){
+    message("bFPCA: GLM finished")
+  }
   alpha_coefs = matrix(alpha_coefs, Kt, 1)
   
   psi_coefs = matrix(rnorm(Kt * npc), Kt, npc) * 0.5
@@ -116,8 +140,8 @@ bfpca = function(Y, npc = 1, Kt = 8, maxiter = 50, t_min = NULL, t_max = NULL,
   while (curr_iter < maxiter && error[curr_iter] > error_thresh) {
 
     if (print.iter) {
-      message("current iteration: ", curr_iter)
-      message("current error: ", error[curr_iter])
+      message("bFPCA: current iteration: ", curr_iter)
+      message("bFPCA: current error: ", error[curr_iter])
     }
     
     for (i in 1:I) {

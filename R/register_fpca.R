@@ -174,6 +174,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
 												 verbose = TRUE, 
 												 precalc_theta = TRUE,
 												 periodic = FALSE,
+												 subsample = TRUE,
 												 ...){
 	
   time_start = Sys.time()
@@ -216,7 +217,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
     }
     if (verbose > 0){
       message("register_fpca: Pre-calculating knots and basis functions")
-      message("time elapsed = ", difftime(Sys.time(), time_start))
+      message("time elapsed = ", difftime(Sys.time(), time_start, units="hours"))
     } 
     ## construct theta matrix
     
@@ -233,7 +234,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
     }
     if (verbose > 0){
       message("register_fpca: Pre-calculating knots and basis functions")
-      message("time elapsed = ", difftime(Sys.time(), time_start))
+      message("time elapsed = ", difftime(Sys.time(), time_start, units="hours"))
     }
     nrows_basis = nrow(Theta_phi)
     # if greater than 10M, subsample
@@ -274,7 +275,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   # first register values to the overall mean
   if (verbose) {
     message("register_fpca: running initial registr step")
-    message("time elapsed = ", difftime(Sys.time(), time_start))
+    message("time elapsed = ", difftime(Sys.time(), time_start, units="hours"))
   }
   registr_step = registr(Y = Y, Kt = Kt, Kh = Kh, family = family,
   											 incompleteness = incompleteness,
@@ -289,7 +290,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   reg_loss[1]       = registr_step$loss
   if (verbose) {
     message("register_fpca:  initial registr step finished")
-    message("time elapsed = ", difftime(Sys.time(), time_start))
+    message("time elapsed = ", difftime(Sys.time(), time_start, units="hours"))
   }
   
   

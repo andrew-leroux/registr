@@ -204,6 +204,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   reg_loss          = rep(NA, max_iterations + 1)
   
   if(precalc_theta){
+    time <- Y$index
     
     if (family == "gamma") {
       mean_family = stats::Gamma(link = "log")
@@ -266,7 +267,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
     Theta_phi = NULL
     mean_coefs_init = NULL
   }
-  rm(subsampling_index, meean_family)
+  rm(subsampling_index, mean_family,time)
   
 
   # first register values to the overall mean

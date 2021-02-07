@@ -281,7 +281,6 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   											 row_obj = rows, cores = cores,
   											 verbose = verbose > 1,
   											 knots = knots,
-  											 Theta_phi = Theta_phi,
   											 mean_coefs_init = mean_coefs_init,
   											 ...)
   index_warped[[2]] = registr_step$Y$index_scaled
@@ -350,7 +349,6 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   												 cores          = cores,
   												 verbose = verbose > 1,
   												 knots = knots,
-  												 Theta_phi = Theta_phi,
   												 mean_coefs_init = mean_coefs_init,
   												 ...)
   	if (verbose) {

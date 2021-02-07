@@ -173,6 +173,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
 												 fpca_index_significantDigits = 4L, cores = 1L, 
 												 verbose = TRUE, 
 												 precalc_theta = TRUE,
+												 periodic = FALSE,
 												 ...){
 	
   time_start = Sys.time()

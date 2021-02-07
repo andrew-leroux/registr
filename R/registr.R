@@ -169,7 +169,7 @@ registr = function(obj = NULL, Y = NULL, Kt = 8, Kh = 4, family = "gaussian", gr
                    periodic = FALSE, warping = "nonparametric",
                    gamma_scales = NULL, cores = 1L,  subsample = TRUE,
                    verbose = TRUE,
-                   Theta_phi = NULL,
+                   knots = NULL,
                    mean_coefs_init = NULL,
                    ...){
   
@@ -270,55 +270,62 @@ registr = function(obj = NULL, Y = NULL, Kt = 8, Kh = 4, family = "gaussian", gr
     if (verbose) {
       message("Registr: Getting Knots and basis functions")
     }
-    if (periodic) {
-      # if periodic, then we want more global knots, because the resulting object from pbs 
-      # only has (knots+intercept) columns.
-      global_knots = quantile(mean_dat$tstar, probs = seq(0, 1, length = Kt+1))[-c(1, Kt+1)]
-      mean_basis   = pbs(c(t_min, t_max, mean_dat$tstar), knots = global_knots, intercept = TRUE)[-(1:2),]
+    if(any(is.null(mean_coefs_init), is.null(knots))){
+      if (periodic) {
+        # if periodic, then we want more global knots, because the resulting object from pbs 
+        # only has (knots+intercept) columns.
+        global_knots = quantile(mean_dat$tstar, probs = seq(0, 1, length = Kt+1))[-c(1, Kt+1)]
+        mean_basis   = pbs(c(t_min, t_max, mean_dat$tstar), knots = global_knots, intercept = TRUE)[-(1:2),]
+        
+      } else {
+        # if not periodic, then we want fewer global knots, because the resulting object from bs
+        # has (knots+degree+intercept) columns, and degree is set to 3 by default.
+        global_knots = quantile(mean_dat$tstar, probs = seq(0, 1, length = Kt - 2))[-c(1, Kt - 2)]
+        mean_basis   =  bs(c(t_min, t_max, mean_dat$tstar), knots = global_knots, intercept = TRUE)[-(1:2),]
+      } 
       
-    } else {
-      # if not periodic, then we want fewer global knots, because the resulting object from bs
-      # has (knots+degree+intercept) columns, and degree is set to 3 by default.
-      global_knots = quantile(mean_dat$tstar, probs = seq(0, 1, length = Kt - 2))[-c(1, Kt - 2)]
-      mean_basis   =  bs(c(t_min, t_max, mean_dat$tstar), knots = global_knots, intercept = TRUE)[-(1:2),]
-    } 
-    
-    if (family == "gamma") {
-      mean_family = stats::Gamma(link = "log")
-    } else {
-      mean_family = family
-    }
-    nrows_basis = nrow(mean_basis)
-    # if greater than 10M, subsample
-    if (nrows_basis > 10000000 && subsample) {
+      if (family == "gamma") {
+        mean_family = stats::Gamma(link = "log")
+      } else {
+        mean_family = family
+      }
+      nrows_basis = nrow(mean_basis)
+      # if greater than 10M, subsample
+      if (nrows_basis > 10000000 && subsample) {
+        if (verbose) {
+          message("Registr: Running Sub-sampling")
+        }       
+        uids = unique(mean_dat$id)
+        avg_rows_per_id = nrows_basis / length(uids)
+        size = round(10000000 / avg_rows_per_id)
+        ids = sample(uids, size = size, replace = FALSE)
+        rm(uids)
+        subsampling_index = which(mean_dat$id %in% ids)
+        rm(ids)
+        mean_dat = mean_dat[subsampling_index, ]
+        mean_basis = mean_basis[subsampling_index, ]
+        rm(subsampling_index)
+      }
       if (verbose) {
-        message("Registr: Running Sub-sampling")
-      }       
-      uids = unique(mean_dat$id)
-      avg_rows_per_id = nrows_basis / length(uids)
-      size = round(10000000 / avg_rows_per_id)
-      ids = sample(uids, size = size, replace = FALSE)
-      rm(uids)
-      subsampling_index = which(mean_dat$id %in% ids)
-      rm(ids)
-      mean_dat = mean_dat[subsampling_index, ]
-      mean_basis = mean_basis[subsampling_index, ]
-      rm(subsampling_index)
-    }
-    if (verbose) {
-      message("Registr: Running GLM")
-    }   
-    if (requireNamespace("fastglm", quietly = TRUE)) {
-      mean_coefs = fastglm::fastglm(
-        x = mean_basis, y = mean_dat$value,
-        family = mean_family, method=2)
-      mean_coefs = coef(mean_coefs)
+        message("Registr: Running GLM")
+      }   
+      if (requireNamespace("fastglm", quietly = TRUE)) {
+        mean_coefs = fastglm::fastglm(
+          x = mean_basis, y = mean_dat$value,
+          family = mean_family, method=2)
+        mean_coefs = coef(mean_coefs)
+      } else {
+        mean_coefs = coef(glm(mean_dat$value ~ 0 + mean_basis, family = mean_family,
+                              glm.control = list(trace = verbose > 0)))
+      }
+      rm(mean_basis)
+      rm(mean_dat)
     } else {
-      mean_coefs = coef(glm(mean_dat$value ~ 0 + mean_basis, family = mean_family,
-                            glm.control = list(trace = verbose > 0)))
+      mean_coefs = mean_coefs_init
+      global_knots = knots
     }
-    rm(mean_basis)
-    rm(mean_dat)
+    
+
   }
   
   ### Calculate warping functions  

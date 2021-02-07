@@ -205,6 +205,8 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   
   if(precalc_theta){
     time <- Y$index
+    t_min = min(time) 
+    t_max = max(time) 
     
     if (family == "gamma") {
       mean_family = stats::Gamma(link = "log")
@@ -216,8 +218,6 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
       message("time elapsed = ", difftime(Sys.time(), time_start))
     } 
     ## construct theta matrix
-    if (is.null(t_min)) { t_min = min(time) }
-    if (is.null(t_max)) { t_max = max(time) }
     
     if (periodic) {
       # if periodic, then we want more global knots, because the resulting object from pbs 

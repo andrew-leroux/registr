@@ -240,7 +240,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
     # if greater than 10M, subsample
     if (nrows_basis > 10000000 && subsample) {
       if (verbose) {
-        message("Registr: Running Sub-sampling")
+        message("register_fpca: Running Sub-sampling")
       }       
       uids = unique(Y$id)
       avg_rows_per_id = nrows_basis / length(uids)
@@ -351,8 +351,8 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   												 beta           = registr_step$hinv_beta,
   												 cores          = cores,
   												 verbose = verbose > 1,
-  												 knots = knots,
-  												 mean_coefs_init = mean_coefs_init,
+  												 # knots = knots,
+  												 # mean_coefs_init = mean_coefs_init,
   												 ...)
   	if (verbose) {
   	  message("register_fpca: Iterative registr step finished")

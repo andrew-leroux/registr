@@ -173,7 +173,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
 												 fpca_index_significantDigits = 4L, cores = 1L, 
 												 verbose = TRUE, 
 												 ...){
-	
+	time_st = Sys.time()
   index = NULL
   rm(list="index")
   if (!(family %in% c("gaussian","binomial","gamma","poisson"))) {
@@ -199,7 +199,7 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
 
   # first register values to the overall mean
   if (verbose) {
-    message("Running registr step")
+    message("Running initial registr step")
   }
   registr_step = registr(Y = Y, Kt = Kt, Kh = Kh, family = family,
   											 incompleteness = incompleteness,
@@ -208,6 +208,9 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   											 row_obj = rows, cores = cores,
   											 verbose = verbose > 1,
   											 ...)
+  if (verbose) {
+    message("Running initial registr step completed. Time Difference (hrs): ", round(difftime(Sys.time(), time_st, units="hours"),2))
+  }
   index_warped[[2]] = registr_step$Y$index_scaled
   reg_loss[1]       = registr_step$loss
   
@@ -251,6 +254,9 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   															start_params            = gamm4_startParams)
   	}
   	if (verbose) {
+  	  message("FPCA step completed. Time Difference (hrs): ", round(difftime(Sys.time(), time_st, units="hours"),2))
+  	}	
+  	if (verbose) {
   	  message("Registr Step")
   	}  	
   	registr_step = registr(obj = fpca_step, Kt = Kt, Kh = Kh, family = family, 
@@ -261,7 +267,9 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   												 cores          = cores,
   												 verbose = verbose > 1,
   												 ...)
-  	
+  	if (verbose) {
+  	  message("registr step completed. Time Difference (hrs): ", round(difftime(Sys.time(), time_st, units="hours"),2))
+  	}	
   	index_warped[[iter + 2]] = registr_step$Y$index_scaled
   	reg_loss[iter + 1]       = registr_step$loss
   	

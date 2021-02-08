@@ -275,6 +275,9 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   	
   	# calculate how much the warping functions changed since the last iteration
   	delta_index[iter] = mean((index_warped[[iter + 2]] - index_warped[[iter + 1]])^2) 
+  	if(verbose){
+  	  message("Current Error = ", delta_index[iter])
+  	}
   } # END while loop
   
   converged = (delta_index[iter] <= convergence_threshold)

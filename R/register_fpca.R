@@ -283,8 +283,8 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   											 Y_template     = Y_template,
   											 row_obj = rows, cores = cores,
   											 verbose = verbose > 1,
-  											 knots = knots,
-  											 mean_coefs_init = mean_coefs_init,
+  											 # knots = knots,
+  											 # mean_coefs_init = mean_coefs_init,
   											 ...)
   index_warped[[2]] = registr_step$Y$index_scaled
   reg_loss[1]       = registr_step$loss

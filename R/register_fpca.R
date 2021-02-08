@@ -313,8 +313,8 @@ register_fpca = function(Y, Kt = 8, Kh = 4, family = "gaussian",
   			fpca_step = bfpca(registr_step$Y, npc = npc, Kt = Kt, row_obj = rows, seed = fpca_seed, maxiter = fpca_maxiter, 
   												error_thresh = fpca_error_thresh, verbose = verbose > 1, 
   												knots = knots,
-  												Theta_phi = Theta_phi,
-  												mean_coefs_init = mean_coefs_init,
+  												# Theta_phi = Theta_phi,
+  												# mean_coefs_init = mean_coefs_init,
   												...)
   		} else if (family == "gaussian") {
   			fpca_step = fpca_gauss(registr_step$Y, npc = npc, Kt = Kt, row_obj = rows, seed = fpca_seed, maxiter = fpca_maxiter,
